@@ -1,8 +1,4 @@
+
 {
-  "experimentalServices": [
-    {
-      "name": "api",
-      "src": "api/index.js"
-    }
-  ]
+  "rewrites": [{ "source": "/(.*)", "destination": "/" }]
 }
