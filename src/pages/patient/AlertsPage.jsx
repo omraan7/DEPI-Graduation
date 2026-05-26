@@ -1,17 +1,42 @@
-import { useState } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { HiCheckCircle, HiClock, HiCalendar, HiBell } from 'react-icons/hi';
+import { AuthContext } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
 
-const ALERTS = [
-  { id:1, type:'session',  icon:<HiCalendar size={18}/>, color:'var(--primary)',  title:'Session Reminder',           body:'Your session with Dr. Sarah is tomorrow at 10:00 AM.', time:'2h ago',  read:false },
-  { id:2, type:'progress', icon:<HiCheckCircle size={18}/>,color:'#10b981',       title:'Great Progress!',            body:'You\'ve completed 8 sessions. Keep it up!',             time:'1d ago',  read:false },
-  { id:3, type:'exercise', icon:<HiBell size={18}/>,     color:'#f59e0b',          title:'New Exercise Assigned',      body:'Dr. Sarah added "Full Overhead" to your plan.',         time:'2d ago',  read:true },
-  { id:4, type:'session',  icon:<HiClock size={18}/>,    color:'var(--primary)',   title:'Session Complete',           body:'You completed your shoulder session. 87° max angle.',   time:'3d ago',  read:true },
-  { id:5, type:'progress', icon:<HiCheckCircle size={18}/>,color:'#10b981',       title:'Pain Level Improved',        body:'Your pain level dropped from 7 to 5. Excellent!',       time:'5d ago',  read:true },
-];
-
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState(ALERTS);
+  const { token } = useContext(AuthContext);
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchAlerts() {
+      try {
+        const res = await fetch('/api/patient/alerts', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Transform backend Notification model to UI model
+          const transformed = data.map(n => ({
+            id: n._id,
+            type: n.type,
+            icon: <HiBell size={18}/>, // You can make this dynamic based on n.type
+            color: 'var(--primary)',
+            title: n.title,
+            body: n.message,
+            time: new Date(n.createdAt).toLocaleDateString(),
+            read: n.isRead
+          }));
+          setAlerts(transformed);
+        }
+      } catch (err) {
+        console.error('Failed to fetch alerts:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAlerts();
+  }, [token]);
 
   function markRead(id) {
     setAlerts(prev => prev.map(a => a.id===id ? {...a, read:true} : a));
@@ -37,30 +62,36 @@ export default function AlertsPage() {
       </div>
 
       <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-        {alerts.map(a => (
-          <Card key={a.id} onClick={() => markRead(a.id)} style={{
-            padding:'14px 16px',
-            borderLeft:`3px solid ${a.read ? 'var(--gray-100)' : a.color}`,
-            opacity: a.read ? .7 : 1,
-            cursor:'pointer',
-          }}>
-            <div style={{ display:'flex', gap:12, alignItems:'flex-start' }}>
-              <div style={{ width:36, height:36, borderRadius:'var(--radius-md)', background:a.color+'18', color:a.color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:2 }}>
-                {a.icon}
-              </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-                  <span style={{ fontWeight:700, fontSize:14, color:'var(--gray-900)' }}>{a.title}</span>
-                  <span style={{ fontSize:11, color:'var(--gray-400)', flexShrink:0, marginLeft:8 }}>{a.time}</span>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--gray-500)' }}>Loading alerts...</div>
+        ) : alerts.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--gray-500)' }}>No notifications found.</div>
+        ) : (
+          alerts.map(a => (
+            <Card key={a.id} onClick={() => markRead(a.id)} style={{
+              padding:'14px 16px',
+              borderLeft:`3px solid ${a.read ? 'var(--gray-100)' : a.color}`,
+              opacity: a.read ? .7 : 1,
+              cursor:'pointer',
+            }}>
+              <div style={{ display:'flex', gap:12, alignItems:'flex-start' }}>
+                <div style={{ width:36, height:36, borderRadius:'var(--radius-md)', background:a.color+'18', color:a.color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:2 }}>
+                  {a.icon}
                 </div>
-                <p style={{ fontSize:13, color:'var(--gray-600)', margin:0, lineHeight:1.5 }}>{a.body}</p>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                    <span style={{ fontWeight:700, fontSize:14, color:'var(--gray-900)' }}>{a.title}</span>
+                    <span style={{ fontSize:11, color:'var(--gray-400)', flexShrink:0, marginLeft:8 }}>{a.time}</span>
+                  </div>
+                  <p style={{ fontSize:13, color:'var(--gray-600)', margin:0, lineHeight:1.5 }}>{a.body}</p>
+                </div>
+                {!a.read && (
+                  <div style={{ width:8, height:8, borderRadius:'50%', background:'var(--primary)', flexShrink:0, marginTop:6 }}/>
+                )}
               </div>
-              {!a.read && (
-                <div style={{ width:8, height:8, borderRadius:'50%', background:'var(--primary)', flexShrink:0, marginTop:6 }}/>
-              )}
-            </div>
-          </Card>
-        ))}
+            </Card>
+          ))
+        )}
       </div>
     </div>
   );

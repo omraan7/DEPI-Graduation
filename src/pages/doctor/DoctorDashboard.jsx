@@ -1,7 +1,9 @@
+import { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HiUsers, HiCheckCircle, HiTrendingUp, HiClock } from 'react-icons/hi';
 import { FiActivity } from 'react-icons/fi';
-import { MOCK_PATIENTS, STATUS_CONFIG, INJURY_LABELS } from '../../data/mockData';
+import { STATUS_CONFIG, INJURY_LABELS } from '../../data/mockData';
+import { AuthContext } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Avatar from '../../components/ui/Avatar';
@@ -55,7 +57,31 @@ function WeekChart() {
 
 export default function DoctorDashboard() {
   const navigate = useNavigate();
-  const patients = MOCK_PATIENTS.filter(p => p.assignedDoctor === 'd1');
+  const { user, token } = useContext(AuthContext);
+  
+  const [patients, setPatients] = useState([]);
+  const [stats, setStats] = useState({ totalPatients: 0, activePlans: 0, todayAppointments: 0, unreadMessages: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [statRes, patRes] = await Promise.all([
+          fetch('/api/doctor/dashboard', { headers: { Authorization: `Bearer ${token}` } }),
+          fetch('/api/doctor/patients', { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+
+        if (statRes.ok) setStats(await statRes.json());
+        if (patRes.ok) setPatients(await patRes.json());
+      } catch (err) {
+        console.error('Failed to fetch dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, [token]);
+
   const active   = patients.filter(p => p.status==='inprogress').length;
   const completed= patients.filter(p => p.status==='completed').length;
 
@@ -65,17 +91,17 @@ export default function DoctorDashboard() {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div>
           <h1 style={{ fontSize:26, fontWeight:800, color:'var(--gray-900)', margin:0 }}>Dashboard</h1>
-          <p style={{ color:'var(--gray-500)', marginTop:4 }}>Welcome back, Dr. Sarah. Here's your overview.</p>
+          <p style={{ color:'var(--gray-500)', marginTop:4 }}>Welcome back, Dr. {user?.name?.split(' ')[1] || user?.name || 'Sarah'}. Here's your overview.</p>
         </div>
         <Badge color="var(--success)" bg="#ecfdf5" size="md">● Live</Badge>
       </div>
 
       {/* Stats */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
-        <StatCard icon={<HiUsers size={20}/>}        value={patients.length} label="Total Patients"   color="var(--primary)"   trend="+2"/>
-        <StatCard icon={<FiActivity size={20}/>}     value={active}          label="In Treatment"    color="#0ea5e9"/>
-        <StatCard icon={<HiCheckCircle size={20}/>}  value={completed}       label="Completed"       color="var(--success)"   trend="+1"/>
-        <StatCard icon={<HiClock size={20}/>}        value="3"               label="Sessions Today"  color="var(--warning)"/>
+        <StatCard icon={<HiUsers size={20}/>}        value={stats.totalPatients} label="Total Patients"   color="var(--primary)"   trend="+2"/>
+        <StatCard icon={<FiActivity size={20}/>}     value={stats.activePlans}   label="In Treatment"    color="#0ea5e9"/>
+        <StatCard icon={<HiCheckCircle size={20}/>}  value={completed}           label="Completed"       color="var(--success)"   trend="+1"/>
+        <StatCard icon={<HiClock size={20}/>}        value={stats.todayAppointments} label="Sessions Today"  color="var(--warning)"/>
       </div>
 
       {/* Charts row */}

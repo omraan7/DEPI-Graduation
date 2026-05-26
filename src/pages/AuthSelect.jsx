@@ -54,7 +54,7 @@ export default function AuthSelect() {
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24 }}>
           {roles.map(role => (
-            <button key={role.id} onClick={() => navigate(role.path)} style={{
+            <button key={role.id} onClick={() => navigate(`/register?role=${role.id}`)} style={{
               background:'#fff', border:`2px solid ${preselected === role.id ? role.color : 'var(--gray-200)'}`,
               borderRadius:'var(--radius-xl)', padding:'36px 28px',
               cursor:'pointer', textAlign:'center',
@@ -90,7 +90,7 @@ export default function AuthSelect() {
         </div>
 
         <p style={{ textAlign:'center', fontSize:13, color:'var(--gray-400)', marginTop:28 }}>
-          Already have an account? <span style={{ color:'var(--primary)', cursor:'pointer', fontWeight:600 }}>Sign in</span>
+          Already have an account? <span onClick={() => navigate('/login')} style={{ color:'var(--primary)', cursor:'pointer', fontWeight:600 }}>Sign in</span>
         </p>
       </div>
     </div>

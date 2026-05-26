@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../../context/AuthContext';
 import { HiX, HiArrowRight, HiArrowLeft } from 'react-icons/hi';
 import { MOVEMENT_LIMITATIONS } from '../../data/mockData';
 import Button from '../../components/ui/Button';
@@ -73,10 +74,12 @@ function BodySVG({ view }) {
 
 export default function PainMap() {
   const navigate = useNavigate();
+  const { token } = useContext(AuthContext);
   const [view,        setView]        = useState('front');
   const [selected,    setSelected]    = useState([]);    // array of hotspot ids
   const [painLevel,   setPainLevel]   = useState(5);
   const [limitations, setLimitations] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const hotspots = BODY_HOTSPOTS[view];
 
@@ -94,12 +97,33 @@ export default function PainMap() {
     );
   }
 
-  function handleNext() {
+  async function handleNext() {
     if (selected.length === 0) return;
+    
     // determine primary injury from most-selected injury type
     const counts = {};
     selected.forEach(s => { counts[s.injury] = (counts[s.injury] || 0) + 1; });
     const primaryInjury = Object.entries(counts).sort((a,b) => b[1]-a[1])[0]?.[0] || 'shoulder';
+    
+    setLoading(true);
+    try {
+      await fetch('/api/patient/pain', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          painLevel,
+          bodyParts: selected.map(s => s.label),
+          notes: limitations.join(', ')
+        })
+      });
+    } catch (err) {
+      console.error('Failed to save pain record:', err);
+    }
+    setLoading(false);
+    
     navigate(`/patient/doctors?injury=${primaryInjury}&pain=${painLevel}`);
   }
 
@@ -286,8 +310,8 @@ export default function PainMap() {
             <Button variant="ghost" icon={<HiArrowLeft/>} onClick={() => navigate('/patient/chat')}>
               Back
             </Button>
-            <Button disabled={selected.length === 0} iconRight={<HiArrowRight/>} onClick={handleNext}>
-              Next
+            <Button disabled={selected.length === 0 || loading} iconRight={<HiArrowRight/>} onClick={handleNext}>
+              {loading ? 'Saving...' : 'Next'}
             </Button>
           </div>
         </div>

@@ -1,6 +1,8 @@
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { HiHome, HiUser, HiChatAlt2, HiBell } from 'react-icons/hi';
+import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { HiHome, HiUser, HiChatAlt2, HiBell, HiLogout } from 'react-icons/hi';
 import { HiOutlineLocationMarker } from 'react-icons/hi';
+import { useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 
 const NAV_ITEMS = [
   { path: '/patient/home',     icon: HiHome,     label: 'Home'     },
@@ -12,7 +14,11 @@ const NAV_ITEMS = [
 export default function PatientLayout() {
   const navigate  = useNavigate();
   const location  = useLocation();
+  const { user, token, logout, loading } = useContext(AuthContext);
   const isTracker = location.pathname.includes('/tracker');
+
+  if (loading) return <div>Loading...</div>;
+  if (!token) return <Navigate to="/login" replace />;
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--gray-50)', display: 'flex', flexDirection: 'column' }}>
@@ -32,7 +38,12 @@ export default function PatientLayout() {
               <HiBell size={22} color="var(--gray-500)" />
               <span style={{ position:'absolute', top:-2, right:-2, width:8, height:8, background:'var(--danger)', borderRadius:'50%' }}/>
             </button>
-            <div style={{ width:34, height:34, borderRadius:'50%', background:'var(--primary-light)', color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:13 }}>P</div>
+            <div style={{ width:34, height:34, borderRadius:'50%', background:'var(--primary-light)', color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:13 }}>
+              {user?.name?.charAt(0)?.toUpperCase() || 'P'}
+            </div>
+            <button onClick={logout} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--gray-500)' }}>
+              <HiLogout size={22} />
+            </button>
           </div>
         </header>
       )}

@@ -2,10 +2,11 @@
 // Imports all hooks and components from the previous v5 build
 // and renders them inside a full-screen layout with a back button.
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HiArrowLeft } from 'react-icons/hi';
 import { EXERCISES_BY_INJURY } from '../../data/mockData';
+import { AuthContext } from '../../context/AuthContext';
 
 // ── Shared tracker components (inline, self-contained) ────────
 
@@ -85,6 +86,7 @@ function useTimer(running){
 // ── Main TrackerPage ──────────────────────────────────────────
 export default function TrackerPage(){
   const navigate = useNavigate();
+  const { token } = useContext(AuthContext);
   const videoRef = useRef(null), canvasRef = useRef(null);
 
   const [injury]   = useState('shoulder');
@@ -127,10 +129,32 @@ export default function TrackerPage(){
       setLog(p=>[...p,{repNum:repsRef.current,ex:exRef.current,side:sideRef.current,peakAngle:peak,time}]);
       if(repsRef.current>=tRepsRef.current){
         setCelebrating(true);
+        saveSession();
         setTimeout(()=>{setCelebrating(false);runRef.current=false;setRunning(false);},3000);
       }
     }
   },[]);
+
+  async function saveSession() {
+    if (repsRef.current === 0) return;
+    try {
+      await fetch('/api/patient/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          exerciseName: exRef.current.nameEn,
+          durationMinutes: 5, // mock duration for now
+          repsCompleted: repsRef.current,
+          maxAngle: peakRef.current || 0,
+        })
+      });
+    } catch (err) {
+      console.error('Failed to log session', err);
+    }
+  }
 
   async function startCam(){
     if(!window.Pose||!window.Camera)return false;
@@ -163,7 +187,10 @@ export default function TrackerPage(){
   }
   function handleToggle(){if(!tracking){handleStart();return;}const n=!running;setRunning(n);runRef.current=n;}
   function handleReset(){repsRef.current=0;isUpRef.current=false;peakRef.current=0;setReps(0);setAngle(null);setLog([]);}
-  function handleStop(){camRef.current?.stop?.();if(videoRef.current?.srcObject)videoRef.current.srcObject.getTracks().forEach(t=>t.stop());setTracking(false);setRunning(false);runRef.current=false;handleReset();resetTimer();}
+  function handleStop(){
+    if (repsRef.current > 0) saveSession();
+    camRef.current?.stop?.();if(videoRef.current?.srcObject)videoRef.current.srcObject.getTracks().forEach(t=>t.stop());setTracking(false);setRunning(false);runRef.current=false;handleReset();resetTimer();
+  }
 
   if(!ex) return null;
 

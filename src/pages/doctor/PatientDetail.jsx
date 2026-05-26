@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { HiArrowLeft, HiPencil, HiSave } from 'react-icons/hi';
-import { MOCK_PATIENTS, STATUS_CONFIG, INJURY_LABELS, EXERCISES_BY_INJURY } from '../../data/mockData';
+import { STATUS_CONFIG, INJURY_LABELS, EXERCISES_BY_INJURY } from '../../data/mockData';
+import { AuthContext } from '../../context/AuthContext';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -23,13 +24,53 @@ function Ring({ pct, color, size=80 }) {
 export default function PatientDetail() {
   const { id }     = useParams();
   const navigate   = useNavigate();
-  const patient    = MOCK_PATIENTS.find(p => p.id === id) || MOCK_PATIENTS[0];
-  const st         = STATUS_CONFIG[patient.status];
-  const exercises  = EXERCISES_BY_INJURY[patient.injury] || [];
+  const { token }  = useContext(AuthContext);
+  
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const [notes, setNotes] = useState('Patient progressing well. Continue with current exercise plan. Monitor shoulder elevation angles closely.');
   const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState('overview');
+
+  useEffect(() => {
+    async function fetchDetail() {
+      try {
+        const res = await fetch(`/api/doctor/patients/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          setData(await res.json());
+        }
+      } catch (err) {
+        console.error('Failed to fetch patient details', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDetail();
+  }, [id, token]);
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading details...</div>;
+  if (!data) return <div style={{ padding: 40, textAlign: 'center' }}>Patient not found</div>;
+
+  const { patient, plans, sessionLogs } = data;
+  const st         = STATUS_CONFIG[patient.status] || STATUS_CONFIG['inprogress'];
+  
+  // Try to use the active plan's exercises, otherwise fallback to mock
+  let exercises = [];
+  if (plans && plans.length > 0 && plans[0].exercises) {
+    exercises = plans[0].exercises.map(e => ({
+      key: e.exercise._id,
+      nameEn: e.exercise.title,
+      descEn: e.exercise.description,
+      target: 180, // placeholder
+      icon: '💪',
+      color: '#10b981'
+    }));
+  } else {
+    exercises = EXERCISES_BY_INJURY[patient.injury] || [];
+  }
 
   const TABS = ['overview','exercises','history','notes'];
 
@@ -142,20 +183,20 @@ export default function PatientDetail() {
               </tr>
             </thead>
             <tbody>
-              {[
-                { date:'Apr 15',ex:'Shoulder Abduction', reps:10, angle:'87°', pain:5, dur:'28 min' },
-                { date:'Apr 13',ex:'Shoulder Flexion',   reps:8,  angle:'105°',pain:6, dur:'32 min' },
-                { date:'Apr 11',ex:'Full Overhead',      reps:6,  angle:'142°',pain:7, dur:'25 min' },
-              ].map((r, i) => (
-                <tr key={i} style={{ borderBottom:'1px solid var(--gray-100)' }}>
-                  <td style={{ padding:'14px 20px', fontSize:13 }}>{r.date}</td>
-                  <td style={{ padding:'14px 20px', fontSize:13, fontWeight:500 }}>{r.ex}</td>
-                  <td style={{ padding:'14px 20px', fontSize:13 }}>{r.reps}</td>
-                  <td style={{ padding:'14px 20px', fontSize:13, fontWeight:700, color:'var(--primary)' }}>{r.angle}</td>
-                  <td style={{ padding:'14px 20px', fontSize:13, color:r.pain<=4?'var(--success)':r.pain<=6?'var(--warning)':'var(--danger)', fontWeight:700 }}>{r.pain}/10</td>
-                  <td style={{ padding:'14px 20px', fontSize:13, color:'var(--gray-500)' }}>{r.dur}</td>
+              {sessionLogs && sessionLogs.length > 0 ? sessionLogs.map((log) => (
+                <tr key={log._id} style={{ borderBottom:'1px solid var(--gray-100)' }}>
+                  <td style={{ padding:'14px 20px', fontSize:13 }}>{new Date(log.createdAt).toLocaleDateString('en-US', {month:'short', day:'numeric'})}</td>
+                  <td style={{ padding:'14px 20px', fontSize:13, fontWeight:500 }}>{log.exerciseName || log.exercise?.title}</td>
+                  <td style={{ padding:'14px 20px', fontSize:13 }}>{log.repsCompleted}</td>
+                  <td style={{ padding:'14px 20px', fontSize:13, fontWeight:700, color:'var(--primary)' }}>{log.maxAngle}°</td>
+                  <td style={{ padding:'14px 20px', fontSize:13, color:(log.painLevelAfter||5)<=4?'var(--success)':(log.painLevelAfter||5)<=6?'var(--warning)':'var(--danger)', fontWeight:700 }}>{log.painLevelAfter || '-'}/10</td>
+                  <td style={{ padding:'14px 20px', fontSize:13, color:'var(--gray-500)' }}>{log.durationMinutes} min</td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan="6" style={{ padding:'40px 20px', textAlign:'center', color:'var(--gray-500)' }}>No session history recorded yet.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </Card>

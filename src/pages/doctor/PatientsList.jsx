@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HiSearch, HiFilter } from 'react-icons/hi';
-import { MOCK_PATIENTS, STATUS_CONFIG, INJURY_LABELS } from '../../data/mockData';
+import { STATUS_CONFIG, INJURY_LABELS } from '../../data/mockData';
+import { AuthContext } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Avatar from '../../components/ui/Avatar';
@@ -9,10 +10,31 @@ import Button from '../../components/ui/Button';
 
 export default function PatientsList() {
   const navigate   = useNavigate();
+  const { token }  = useContext(AuthContext);
   const [search,   setSearch]   = useState('');
   const [filter,   setFilter]   = useState('all');
+  const [patients, setPatients] = useState([]);
+  const [loading,  setLoading]  = useState(true);
 
-  const filtered = MOCK_PATIENTS.filter(p => {
+  useEffect(() => {
+    async function fetchPatients() {
+      try {
+        const res = await fetch('/api/doctor/patients', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          setPatients(await res.json());
+        }
+      } catch (err) {
+        console.error('Failed to fetch patients', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchPatients();
+  }, [token]);
+
+  const filtered = patients.filter(p => {
     const matchS = p.name.toLowerCase().includes(search.toLowerCase()) || INJURY_LABELS[p.injury]?.toLowerCase().includes(search.toLowerCase());
     const matchF = filter === 'all' || p.status === filter;
     return matchS && matchF;
@@ -30,7 +52,7 @@ export default function PatientsList() {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div>
           <h1 style={{ fontSize:24, fontWeight:800, color:'var(--gray-900)', margin:0 }}>Patients</h1>
-          <p style={{ color:'var(--gray-500)', marginTop:4 }}>{MOCK_PATIENTS.length} total patients</p>
+          <p style={{ color:'var(--gray-500)', marginTop:4 }}>{patients.length} total patients</p>
         </div>
         <Button>+ Add Patient</Button>
       </div>

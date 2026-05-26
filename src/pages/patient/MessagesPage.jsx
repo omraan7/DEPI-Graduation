@@ -1,17 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useContext } from 'react';
 import { HiArrowRight } from 'react-icons/hi';
 import { FiPhone, FiVideo } from 'react-icons/fi';
+import { AuthContext } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
 
-const DOCTOR = { name:'Dr. Sarah Ahmed', avatar:'SA', color:'#db2777', specialty:'Shoulder Specialist' };
-
-const INITIAL_MSGS = [
-  { from:'doctor', text:"Hello Ahmed! How are you feeling today?", time:'10:00 AM' },
-  { from:'patient',text:"Hi Doctor! My shoulder feels a bit better after yesterday's exercises.", time:'10:02 AM' },
-  { from:'doctor', text:"That's great progress! Did you manage to do the full overhead raises?", time:'10:03 AM' },
-  { from:'patient',text:"Yes! I reached about 140° this time.", time:'10:05 AM' },
-  { from:'doctor', text:"Excellent! 140° is a big improvement. Keep at it — I've updated your target angle to 150° for this week. 💪", time:'10:06 AM' },
-];
+const DEFAULT_DOCTOR = { name:'Dr. Sarah Ahmed', avatar:'SA', color:'#db2777', specialty:'Specialist' };
 
 const AUTO_REPLIES = [
   "Great work! Keep up the good effort.",
@@ -26,26 +19,84 @@ function Dot({ delay }) {
 }
 
 export default function MessagesPage() {
-  const [msgs,   setMsgs]   = useState(INITIAL_MSGS);
+  const { user, token } = useContext(AuthContext);
+  const [msgs,   setMsgs]   = useState([]);
   const [input,  setInput]  = useState('');
-  const [typing, setTyping] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [doctorId, setDoctorId] = useState(null);
+  const [doctorInfo, setDoctorInfo] = useState(DEFAULT_DOCTOR);
   const endRef = useRef(null);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior:'smooth' }); }, [msgs, typing]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior:'smooth' }); }, [msgs, sending]);
+
+  // Fetch initial data: find a doctor, then fetch messages
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const docRes = await fetch('/api/patient/doctors', { headers: { Authorization: `Bearer ${token}` } });
+        if (docRes.ok) {
+          const docs = await docRes.json();
+          if (docs.length > 0) {
+            const doc = docs[0];
+            setDoctorId(doc._id);
+            setDoctorInfo({
+              name: `Dr. ${doc.name}`,
+              avatar: doc.name.charAt(0).toUpperCase(),
+              color: '#db2777',
+              specialty: doc.specialization || 'Physiotherapist'
+            });
+
+            // Fetch messages with this doctor
+            const msgRes = await fetch(`/api/messages/${doc._id}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (msgRes.ok) {
+              const msgData = await msgRes.json();
+              setMsgs(msgData.map(m => ({
+                id: m._id,
+                from: m.sender === user._id ? 'patient' : 'doctor',
+                text: m.content,
+                time: new Date(m.createdAt).toLocaleTimeString('en-US',{ hour:'2-digit', minute:'2-digit' })
+              })));
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load messages:', err);
+      }
+    }
+    loadData();
+  }, [token, user._id]);
 
   function formatTime() { return new Date().toLocaleTimeString('en-US',{ hour:'2-digit', minute:'2-digit' }); }
 
-  function send() {
+  async function send() {
     const t = input.trim();
-    if (!t || typing) return;
+    if (!t || sending || !doctorId) return;
     setInput('');
-    setMsgs(p => [...p, { from:'patient', text:t, time:formatTime() }]);
-    setTyping(true);
-    setTimeout(() => {
-      setTyping(false);
-      const reply = AUTO_REPLIES[Math.floor(Math.random()*AUTO_REPLIES.length)];
-      setMsgs(p => [...p, { from:'doctor', text:reply, time:formatTime() }]);
-    }, 1000 + Math.random()*800);
+    // Optimistic UI
+    setMsgs(p => [...p, { id: Date.now(), from:'patient', text:t, time:formatTime() }]);
+    setSending(true);
+
+    try {
+      await fetch('/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          receiverId: doctorId,
+          content: t
+        })
+      });
+      // Optionally, you could simulate an auto-reply here for demonstration
+      setTimeout(() => {
+        setMsgs(p => [...p, { id: Date.now()+1, from:'doctor', text:"I have received your message and will review it shortly.", time:formatTime() }]);
+      }, 1500);
+    } catch (err) {
+      console.error('Failed to send message:', err);
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -56,9 +107,9 @@ export default function MessagesPage() {
         padding:'12px 20px', display:'flex', alignItems:'center', gap:12,
         flexShrink:0,
       }}>
-        <div style={{ width:42, height:42, borderRadius:'50%', background:DOCTOR.color+'20', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, color:DOCTOR.color, fontSize:14 }}>{DOCTOR.avatar}</div>
+        <div style={{ width:42, height:42, borderRadius:'50%', background:doctorInfo.color+'20', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, color:doctorInfo.color, fontSize:14 }}>{doctorInfo.avatar}</div>
         <div style={{ flex:1 }}>
-          <div style={{ fontWeight:700, fontSize:15, color:'var(--gray-900)' }}>{DOCTOR.name}</div>
+          <div style={{ fontWeight:700, fontSize:15, color:'var(--gray-900)' }}>{doctorInfo.name}</div>
           <div style={{ fontSize:12, color:'#10b981', display:'flex', alignItems:'center', gap:5 }}>
             <span style={{ width:7, height:7, borderRadius:'50%', background:'#10b981', display:'inline-block' }}/> Online
           </div>
@@ -78,9 +129,9 @@ export default function MessagesPage() {
         {msgs.map((m, i) => {
           const isPatient = m.from === 'patient';
           return (
-            <div key={i} style={{ display:'flex', justifyContent:isPatient?'flex-start':'flex-end' }}>
+            <div key={m.id || i} style={{ display:'flex', justifyContent:isPatient?'flex-start':'flex-end' }}>
               {!isPatient && (
-                <div style={{ width:28, height:28, borderRadius:'50%', background:DOCTOR.color+'20', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:DOCTOR.color, marginRight:8, flexShrink:0, alignSelf:'flex-end' }}>{DOCTOR.avatar}</div>
+                <div style={{ width:28, height:28, borderRadius:'50%', background:doctorInfo.color+'20', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:doctorInfo.color, marginRight:8, flexShrink:0, alignSelf:'flex-end' }}>{doctorInfo.avatar}</div>
               )}
               <div>
                 <div style={{
@@ -97,8 +148,8 @@ export default function MessagesPage() {
           );
         })}
 
-        {typing && (
-          <div style={{ display:'flex', justifyContent:'flex-end' }}>
+        {sending && (
+          <div style={{ display:'flex', justifyContent:'flex-start' }}>
             <div style={{ background:'#fff', border:'1px solid var(--gray-100)', borderRadius:'18px 18px 18px 4px', padding:'12px 16px', display:'flex', gap:5, alignItems:'center', boxShadow:'var(--shadow-sm)' }}>
               <Dot delay={0}/>&nbsp;<Dot delay={.18}/>&nbsp;<Dot delay={.36}/>
             </div>
@@ -111,14 +162,15 @@ export default function MessagesPage() {
       <div style={{ background:'#fff', borderTop:'1px solid var(--gray-100)', padding:'12px 20px', display:'flex', gap:10, alignItems:'flex-end', flexShrink:0 }}>
         <textarea value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} }}
-          placeholder="Message Dr. Sarah..." rows={1}
+          placeholder={`Message ${doctorInfo.name}...`} rows={1}
           style={{ flex:1, border:'1px solid var(--gray-200)', borderRadius:'var(--radius-md)', padding:'10px 14px', fontSize:14, fontFamily:'inherit', resize:'none', outline:'none', color:'var(--gray-800)' }}
+          disabled={!doctorId}
         />
-        <button onClick={send} disabled={!input.trim()||typing} style={{
+        <button onClick={send} disabled={!input.trim()||sending||!doctorId} style={{
           width:42, height:42, borderRadius:'50%', border:'none',
-          background: input.trim()&&!typing ? 'var(--primary)' : 'var(--gray-200)',
+          background: input.trim()&&!sending&&doctorId ? 'var(--primary)' : 'var(--gray-200)',
           color:'#fff', display:'flex', alignItems:'center', justifyContent:'center',
-          cursor: input.trim()&&!typing ? 'pointer' : 'default', flexShrink:0, transition:'background .15s',
+          cursor: input.trim()&&!sending&&doctorId ? 'pointer' : 'default', flexShrink:0, transition:'background .15s',
         }}>
           <HiArrowRight size={18}/>
         </button>

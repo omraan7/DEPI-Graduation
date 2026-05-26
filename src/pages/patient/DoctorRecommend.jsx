@@ -1,7 +1,8 @@
+import { useState, useEffect, useContext } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { HiStar, HiLocationMarker, HiClock, HiArrowLeft } from 'react-icons/hi';
 import { FiAward } from 'react-icons/fi';
-import { DOCTORS } from '../../data/mockData';
+import { AuthContext } from '../../context/AuthContext';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -59,10 +60,39 @@ function DoctorCard({ doctor, onSelect }) {
 export default function DoctorRecommend() {
   const [params]  = useSearchParams();
   const navigate  = useNavigate();
+  const { token } = useContext(AuthContext);
+  
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const injury    = params.get('injury') || 'shoulder';
   const painLevel = params.get('pain') || '5';
 
-  const filtered = DOCTORS.filter(d => d.injuries.includes(injury));
+  useEffect(() => {
+    async function fetchDoctors() {
+      try {
+        const res = await fetch('/api/patient/doctors', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Filter by injury if the backend returns all doctors
+          const filtered = data.filter(d => 
+            // In a real app, doctor.specialization might be matched. 
+            // Here we just map injury directly or show all if specialization is missing.
+            !d.specialization || d.specialization.toLowerCase().includes(injury)
+          );
+          setDoctors(filtered.length > 0 ? filtered : data); // fallback to all doctors if no match
+        }
+      } catch (err) {
+        console.error('Failed to fetch doctors', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDoctors();
+  }, [token, injury]);
+
   const INJURY_LABELS = { shoulder:'Shoulder', knee:'Knee', neck:'Neck', back:'Back' };
 
   return (
@@ -73,7 +103,7 @@ export default function DoctorRecommend() {
           <Button variant="ghost" size="sm" icon={<HiArrowLeft/>} onClick={() => navigate(-1)}>Back</Button>
           <div>
             <h1 style={{ fontSize:20, fontWeight:800 }}>Specialists for {INJURY_LABELS[injury] || injury}</h1>
-            <p style={{ fontSize:13, color:'var(--gray-500)' }}>{filtered.length} doctors matched · Pain level: {painLevel}/10</p>
+            <p style={{ fontSize:13, color:'var(--gray-500)' }}>{doctors.length} doctors matched · Pain level: {painLevel}/10</p>
           </div>
         </div>
       </div>
@@ -85,15 +115,34 @@ export default function DoctorRecommend() {
         </div>
 
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-          {filtered.map(d => (
-            <DoctorCard key={d.id} doctor={d} onSelect={doc => navigate(`/patient/doctor/${doc.id}`)}/>
-          ))}
-          {filtered.length === 0 && (
-            <Card style={{ textAlign:'center', padding:'48px 24px' }}>
-              <div style={{ fontSize:48, marginBottom:16 }}>🔍</div>
-              <h3 style={{ fontWeight:700, marginBottom:8 }}>No doctors available</h3>
-              <p style={{ color:'var(--gray-500)', fontSize:14 }}>No specialists found for this injury type right now.</p>
-            </Card>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--gray-500)' }}>Loading doctors...</div>
+          ) : (
+            <>
+              {doctors.map(d => (
+                <DoctorCard key={d._id} doctor={{
+                  id: d._id,
+                  name: `Dr. ${d.name}`,
+                  specialty: d.specialization || 'Physiotherapist',
+                  avatar: d.name.charAt(0).toUpperCase(),
+                  color: '#10b981',
+                  price: 400,
+                  rating: d.rating || 5.0,
+                  reviews: 24,
+                  location: 'Cairo, EG',
+                  experience: d.experience || 5,
+                  available: true,
+                  nextSlot: 'Tomorrow, 10:00 AM'
+                }} onSelect={doc => navigate(`/patient/doctor/${doc.id}`)}/>
+              ))}
+              {doctors.length === 0 && (
+                <Card style={{ textAlign:'center', padding:'48px 24px' }}>
+                  <div style={{ fontSize:48, marginBottom:16 }}>🔍</div>
+                  <h3 style={{ fontWeight:700, marginBottom:8 }}>No doctors available</h3>
+                  <p style={{ color:'var(--gray-500)', fontSize:14 }}>No specialists found right now.</p>
+                </Card>
+              )}
+            </>
           )}
         </div>
       </div>

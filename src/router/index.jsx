@@ -34,6 +34,11 @@ import DoctorLayout  from '../layouts/DoctorLayout';
 // Public
 import Landing    from '../pages/Landing';
 import AuthSelect from '../pages/AuthSelect';
+import Login      from '../pages/Login';
+import Register   from '../pages/Register';
+
+// Middleware
+import ProtectedRoute from '../components/ProtectedRoute';
 
 // Patient
 import ChatOnboarding   from '../pages/patient/ChatOnboarding';
@@ -62,30 +67,36 @@ export default function AppRouter() {
         <Route index element={<Landing />} />
       </Route>
       <Route path="/auth" element={<AuthSelect />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
 
       {/* ── Patient ── */}
-      <Route path="/patient" element={<PatientLayout />}>
-        <Route index element={<Navigate to="/patient/chat" replace />} />
-        <Route path="chat"       element={<ChatOnboarding />} />
-        <Route path="pain-map"   element={<PainMap />} />
-        <Route path="doctors"    element={<DoctorRecommend />} />
-        <Route path="doctor/:id" element={<DoctorProfilePage />} />
-        <Route path="home"       element={<PatientHome />} />
-        <Route path="profile"    element={<PatientProfile />} />
-        <Route path="messages"   element={<MessagesPage />} />
-        <Route path="alerts"     element={<AlertsPage />} />
-        <Route path="tracker"    element={<TrackerPage />} />
+      <Route element={<ProtectedRoute allowedRoles={['patient']} />}>
+        <Route path="/patient" element={<PatientLayout />}>
+          <Route index element={<Navigate to="/patient/chat" replace />} />
+          <Route path="chat"       element={<ChatOnboarding />} />
+          <Route path="pain-map"   element={<PainMap />} />
+          <Route path="doctors"    element={<DoctorRecommend />} />
+          <Route path="doctor/:id" element={<DoctorProfilePage />} />
+          <Route path="home"       element={<PatientHome />} />
+          <Route path="profile"    element={<PatientProfile />} />
+          <Route path="messages"   element={<MessagesPage />} />
+          <Route path="alerts"     element={<AlertsPage />} />
+          <Route path="tracker"    element={<TrackerPage />} />
+        </Route>
       </Route>
 
       {/* ── Doctor ── */}
-      <Route path="/doctor" element={<DoctorLayout />}>
-        <Route index element={<Navigate to="/doctor/dashboard" replace />} />
-        <Route path="dashboard"   element={<DoctorDashboard />} />
-        <Route path="patients"    element={<PatientsList />} />
-        <Route path="patient/:id" element={<PatientDetail />} />
-        <Route path="messages"    element={<DoctorMessages />} />
-        <Route path="analytics"   element={<DoctorAnalytics />} />
-        <Route path="settings"    element={<DoctorSettings />} />
+      <Route element={<ProtectedRoute allowedRoles={['doctor']} />}>
+        <Route path="/doctor" element={<DoctorLayout />}>
+          <Route index element={<Navigate to="/doctor/dashboard" replace />} />
+          <Route path="dashboard"   element={<DoctorDashboard />} />
+          <Route path="patients"    element={<PatientsList />} />
+          <Route path="patient/:id" element={<PatientDetail />} />
+          <Route path="messages"    element={<DoctorMessages />} />
+          <Route path="analytics"   element={<DoctorAnalytics />} />
+          <Route path="settings"    element={<DoctorSettings />} />
+        </Route>
       </Route>
 
       {/* Fallback */}
